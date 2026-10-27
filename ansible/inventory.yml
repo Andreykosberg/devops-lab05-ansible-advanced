@@ -1,0 +1,7 @@
+all:
+  children:
+    scanners:
+      hosts:
+        devops-lab04-vm2:
+          ansible_host: 10.0.2.16
+          ansible_user: runner

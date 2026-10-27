@@ -1,0 +1,70 @@
+---
+- name: Install nmap, scan targets and report results
+  hosts: scanners
+  become: true
+  gather_facts: true
+  vars_files:
+    - vars/scan_vars.yml
+
+  tasks:
+    - name: Install nmap (only on Debian-family hosts)
+      ansible.builtin.apt:
+        name: nmap
+        state: present
+        update_cache: true
+      when: ansible_facts['os_family'] == 'Debian'
+      register: nmap_install
+      notify: nmap installed notification
+
+    - name: Render list of scan targets from vars (Jinja2 template)
+      ansible.builtin.template:
+        src: templates/targets.txt.j2
+        dest: /home/runner/scan_targets.txt
+        owner: runner
+        group: runner
+        mode: "0644"
+      notify: targets file updated notification
+
+    - name: Show scan configuration (debug var)
+      ansible.builtin.debug:
+        var: scan_targets
+
+    - name: Show vault-protected recipient (debug msg, decrypted only in memory)
+      ansible.builtin.debug:
+        msg: "Отчёт о сканировании будет отправлен на: {{ scan_report_recipient }}"
+
+    - name: Warn if target list is empty (conditional demo)
+      ansible.builtin.debug:
+        msg: "ВНИМАНИЕ: список целей пуст!"
+      when: scan_targets | length == 0
+
+    - name: Scan each target with nmap
+      ansible.builtin.shell: "nmap {{ scan_item }} -p {{ scan_port }} -oG -"
+      loop: "{{ scan_targets }}"
+      loop_control:
+        loop_var: scan_item
+      register: scan_results
+      ignore_errors: true
+      changed_when: false
+      failed_when: scan_results.rc is defined and scan_results.rc != 0
+
+    - name: Show nmap scan results per target
+      ansible.builtin.debug:
+        msg: "Target {{ item.scan_item }}: rc={{ item.rc }}\n{{ item.stdout }}"
+      loop: "{{ scan_results.results }}"
+      loop_control:
+        label: "{{ item.scan_item }}"
+
+    - name: Show scan summary (only with -v or higher)
+      ansible.builtin.debug:
+        msg: "Всего просканировано целей: {{ scan_results.results | length }}"
+        verbosity: 1
+
+  handlers:
+    - name: nmap installed notification
+      ansible.builtin.debug:
+        msg: "nmap был установлен/обновлён на {{ inventory_hostname }}"
+
+    - name: targets file updated notification
+      ansible.builtin.debug:
+        msg: "Файл со списком целей обновлён на {{ inventory_hostname }}"

@@ -1,0 +1,5 @@
+# Список целей для сканирования nmap
+# Сгенерировано Ansible ({{ ansible_date_time.iso8601 }}) для хоста {{ inventory_hostname }}
+{% for target in scan_targets %}
+{{ target }}
+{% endfor %}
